@@ -22,7 +22,7 @@ import java.util.List;
 @Service
 public class UniversalScraper implements WebScraper {
 
-    NewsWebsiteRepository newsWebsites;
+    NewsWebsiteRepository newsWebsites; //Repository containing information for news websites to be used
 
     @Autowired
     public UniversalScraper(NewsWebsiteRepository newsWebsites) {
@@ -31,6 +31,9 @@ public class UniversalScraper implements WebScraper {
 
     /**
      * Initiate the scrape
+     *
+     * @param newsOutlet    Name of news outlet
+     * @return      List of Articles
      */
     @Override
     public List<Article> scrape(String newsOutlet) {
@@ -40,10 +43,11 @@ public class UniversalScraper implements WebScraper {
             NewsWebsite newsSite = newsWebsites.findByName(newsOutlet);
 
             String url = newsSite.getRssFeedUrl();
-            Document rssFeed = Jsoup.connect(url).get();
+            Document rssFeed = Jsoup.connect(url).get();    //Attempts to connect to URL and retrieve HTML file
 
-            Elements items = rssFeed.select("item");
+            Elements items = rssFeed.select("item");    //Isolates each article as represented in HTML
 
+            // Iterates through each HTML element, creates an Article object, then stores it 
             for (var i : items) {
                 Article toAdd = createArticle(i, newsSite.getName());
                 articles.add(toAdd);
@@ -55,6 +59,14 @@ public class UniversalScraper implements WebScraper {
         return articles;
     }
 
+    /*
+    * Parses news article HTML into an Article object
+    *
+    * @param i      HTML element pulled from the RSS feed
+    * @param websiteName    Website where the article was pulled
+    * @return Article
+    * @throws ParseException    If article could not be parsed
+    */
     @Override
     public Article createArticle(Element i, String websiteName) throws ParseException {
         DateFormat format = new SimpleDateFormat("E, d MMMM yyyy kk:mm:ss z");
@@ -64,7 +76,7 @@ public class UniversalScraper implements WebScraper {
 
         String snippet;
 
-        //parse date
+        //parse article publication date
         String pubDate = i.select("pubDate").text();
         Date publicationDate;
         if (!pubDate.isEmpty()) {
@@ -73,7 +85,7 @@ public class UniversalScraper implements WebScraper {
             publicationDate = new Date();
         }
 
-        //parse snippet
+        //parse text from article body
         if (websiteName.contentEquals("IGN")) {
             snippet = i.select("description").text();
         } else if (websiteName.contentEquals("PC Gamer")) {
@@ -86,6 +98,7 @@ public class UniversalScraper implements WebScraper {
             snippet = paragraph.text();
         }
 
+        // Condenses text body to 255 character snippet for article preview
         if (snippet.length() > 255) {
             snippet = snippet.substring(0, 255);
         }
