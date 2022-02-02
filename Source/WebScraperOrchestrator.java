@@ -42,8 +42,10 @@ public class WebScraperOrchestrator {
     }
 
     /**
-     * Forces a scrape from each scraper, cleans and stores the collected articles,
+     * Forces a scrape from all active scrapers, cleans and stores the collected articles,
      * and inserts them into the database
+     *
+     * @return List of scraped articles
      */
     public List<Article> scrapeAll() {
         logger.info("Attempting to scrape new articles for each news website.");
@@ -52,16 +54,20 @@ public class WebScraperOrchestrator {
         List<String> articleTitles = new ArrayList<>();
         List<String> articleGameIds = new ArrayList<>();
 
+        // Initiates a scrape and collect articles from each news site
         for (String scraper : scraperNames) {
-            List<Article> articleList = this.scraper.scrape(scraper);
+            List<Article> articleList = this.scraper.scrape(scraper);   // Runs current news website string through UniversalScraper object
 
+            // Checks each article in articleList to filter out irrelevant and duplicate articles, then populates scrapedArticles
             try {
                 for (Article article : articleList) {
+                    
+                    // Checks if current article is irrelevant, and skips to next article if true
                     if (!checkIrrelevantArticles(article)) {
                         List<String> ids = performArticleGameReferenceSearch(article);
                         String id = ids.get(ids.size() - 1);
 
-                        // Add article to scrapedArticles if not a duplicate in db or scrapedArticles
+                        // Add article to scrapedArticles if not a duplicate in database or scrapedArticles
                         if (!checkArticleDuplicates(id, article) && !scrapedArticles.contains(article)) {
                             scrapedArticles.add(article);
                             articleTitles.add(article.getTitle());
@@ -74,13 +80,14 @@ public class WebScraperOrchestrator {
             }
         }
 
+        //Indepently scrapes Mock News Website
         List<Article> mockNewsArticles = mockNewsScraper.scrape(mockNewsScraper.getScraperName());
         for (Article article : mockNewsArticles) {
             if (!checkIrrelevantArticles(article)) {
                 List<String> gameIds = performArticleGameReferenceSearch(article);
                 String gameId = gameIds.get(gameIds.size() - 1);
 
-                // Add article to scrapedArticles if not a duplicate in db or scrapedArticles
+                // Add article to scrapedArticles if not a duplicate in database or scrapedArticles
                 if (!checkArticleDuplicates(gameId, article) && !scrapedArticles.contains(article)) {
                     scrapedArticles.add(article);
                     articleTitles.add(article.getTitle());
@@ -89,6 +96,7 @@ public class WebScraperOrchestrator {
             }
         }
 
+        // Assigns importance score to articles and inserts into database
         if (!scrapedArticles.isEmpty()) {
             assignScrapedArticlesImportance(articleTitles, scrapedArticles);
             insertArticlesIntoDatabase(scrapedArticles);
@@ -121,7 +129,7 @@ public class WebScraperOrchestrator {
                 List<String> gameIds = performArticleGameReferenceSearch(article);
                 String gameId = gameIds.get(gameIds.size() - 1);
 
-                // Add article to scrapedArticles if not a duplicate in db or scrapedArticles
+                // Add article to scrapedArticles if not a duplicate in database or scrapedArticles
                 if (!checkArticleDuplicates(gameId, article) && !scrapedArticles.contains(article)) {
                     scrapedArticles.add(article);
                     articleTitles.add(article.getTitle());
@@ -205,11 +213,12 @@ public class WebScraperOrchestrator {
      * @return Boolean: true if the article already exists
      */
     public Boolean checkArticleDuplicates(String id, Article article) {
-        Game gameInDB = games.findGameById(id);
+        Game gameInDB = games.findGameById(id);     //Game as represented in database
 
         Resources gameResources;
         List<Article> storedGameArticles = new ArrayList<>();
 
+        // Pulls the resources and stored articles for target game
         try {
             gameResources = gameInDB.getResources();
             storedGameArticles = gameResources.getArticles();
@@ -218,6 +227,7 @@ public class WebScraperOrchestrator {
             e.printStackTrace();
         }
 
+        // Checks if new Article matches any stored Articles for target game
         for (Article storedArticle : storedGameArticles) {
             if (article.getTitle().equals(storedArticle.getTitle()) &&
                     article.getNewsWebsiteName().equals(storedArticle.getNewsWebsiteName())) {
@@ -233,21 +243,24 @@ public class WebScraperOrchestrator {
      * Checks if the article is irrelevant and does not contain a game title
      *
      * @param a A scraped article
-     * @return Boolean: true if the article is irrelevant
+     * @return Boolean: true if the article title does not contain any video game titles 
      */
     public Boolean checkIrrelevantArticles(Article a) {
-        List<String> possibleGameIds = performArticleGameReferenceSearch(a);
+        List<String> possibleGameIds = performArticleGameReferenceSearch(a);    //Contains IDs for any games that may be referenceed in Article title
 
         return possibleGameIds.size() <= 0;
     }
 
     /**
      * Inserts collected relevant, non-duplicate articles into the database
+     *
+     * @param scrapedArticles   Cleaned list of articles collected by scrapers
      */
     public void insertArticlesIntoDatabase(List<Article> scrapedArticles) {
         for (Article article : scrapedArticles) {
-            List<String> gameIds = performArticleGameReferenceSearch(article);
+            List<String> gameIds = performArticleGameReferenceSearch(article);  //Finds games referenced in article title
 
+            //Adds article to database under each game referenced in the title
             for (String id : gameIds) {
                 if (games.existsById(id)) {
                     gameService.addArticleToGame(article, id);
@@ -260,7 +273,7 @@ public class WebScraperOrchestrator {
      * Performs an Elastic Search on article titles to find the game(s) an article
      * refers to
      *
-     * @param a A scraped article
+     * @param a     A scraped article
      * @return List<String>  List of IDs for games present in game article
      */
     public List<String> performArticleGameReferenceSearch(Article a) {
@@ -280,7 +293,7 @@ public class WebScraperOrchestrator {
     }
 
     /**
-     * Gets the importance for each title from a list of titles
+     * Gets the importance score for each title from a list of titles
      *
      * @param titles An article title
      * @return A list of Booleans to signify importance
